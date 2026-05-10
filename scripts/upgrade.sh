@@ -1,17 +1,40 @@
 #!/bin/bash
+set -e
+
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+cd "$PROJECT_DIR"
+
+if [ ! -f data.db ]; then
+  echo "未检测到安装数据。请先运行安装向导: bash scripts/install.sh"
+  exit 1
+fi
+
+python3 - <<'PY'
+import sqlite3
+import sys
+
+conn = sqlite3.connect("data.db")
+try:
+    row = conn.execute(
+        "select value from settings where key = 'install_completed'"
+    ).fetchone()
+finally:
+    conn.close()
+
+if not row or row[0] != "true":
+    print("项目尚未通过安装向导完成安装。请先运行: bash scripts/install.sh")
+    sys.exit(1)
+PY
 
 echo "=== wangye-ge 强制升级中 ==="
 
-# 强制重置本地修改，确保能拉取最新代码
 git fetch --all
 git reset --hard origin/main
 
-# 重新安装依赖并构建
 echo "更新后端依赖..."
-cd backend
-source venv/bin/activate
-pip install -r requirements.txt
-cd ..
+source backend/venv/bin/activate
+pip install -r backend/requirements.txt
 
 echo "更新前端并重新构建..."
 cd frontend
@@ -19,7 +42,6 @@ npm install
 npm run build
 cd ..
 
-# 重启服务
 echo "重启 PM2 服务..."
 pm2 restart wangye-ge-backend
 

@@ -41,14 +41,15 @@ python3 -m venv backend/venv
 source backend/venv/bin/activate
 pip install -r backend/requirements.txt
 
-ADMIN_USER="$ADMIN_USER" ADMIN_PASS="$ADMIN_PASS" python - <<'PY'
+ADMIN_USER="$ADMIN_USER" ADMIN_PASS="$ADMIN_PASS" WEB_PORT="$WEB_PORT" BACKEND_PORT="$BACKEND_PORT" python - <<'PY'
 import os
 
 from backend.database import init_db
-from backend.security import configure_admin
+from backend.security import configure_admin, mark_install_complete
 
 init_db()
 configure_admin(os.environ["ADMIN_USER"], os.environ["ADMIN_PASS"])
+mark_install_complete(os.environ["WEB_PORT"], os.environ["BACKEND_PORT"])
 PY
 
 echo "配置前端..."

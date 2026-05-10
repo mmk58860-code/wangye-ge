@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import secrets
+from datetime import datetime, timezone
 
 from fastapi import Depends, Header, HTTPException
 from sqlalchemy.orm import Session
@@ -66,6 +67,35 @@ def configure_admin(username: str, password: str):
         db.commit()
     finally:
         db.close()
+
+
+def mark_install_complete(web_port: str, backend_port: str):
+    db = SessionLocal()
+    try:
+        upsert_setting(db, "install_completed", "true")
+        upsert_setting(db, "install_completed_at", datetime.now(timezone.utc).isoformat())
+        upsert_setting(db, "web_port", web_port)
+        upsert_setting(db, "backend_port", backend_port)
+        db.commit()
+    finally:
+        db.close()
+
+
+def assert_install_complete():
+    db = SessionLocal()
+    try:
+        install_completed = get_setting(db, "install_completed") == "true"
+        admin_user = get_setting(db, "admin_user")
+        admin_password_hash = get_setting(db, "admin_password_hash")
+    finally:
+        db.close()
+
+    if install_completed and admin_user and admin_password_hash:
+        return
+
+    raise RuntimeError(
+        "wangye-ge 尚未通过安装向导完成安装。请在项目根目录运行: bash scripts/install.sh"
+    )
 
 
 def authenticate_admin(db: Session, username: str, password: str) -> str | None:

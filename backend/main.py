@@ -9,7 +9,7 @@ from .models import ApiKey, Setting, SystemLog
 from .api_manager import api_manager
 from .data_fetcher import data_update_loop, subnet_data_manager
 from .event_monitor import event_monitor
-from .security import authenticate_admin, require_admin
+from .security import assert_install_complete, authenticate_admin, require_admin
 
 app = FastAPI(title="Bittensor Dashboard API")
 
@@ -29,6 +29,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     init_db()
+    assert_install_complete()
     # Start background tasks
     asyncio.create_task(data_update_loop())
     asyncio.create_task(event_monitor.start())
