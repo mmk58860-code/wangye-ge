@@ -4,6 +4,32 @@ set -e
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "=== wangye-ge Bittensor Dashboard 安装向导 ==="
+echo "此脚本只用于新机器首次安装。已安装机器升级请运行: bash scripts/upgrade.sh"
+
+if [ -f "$PROJECT_DIR/data.db" ]; then
+  if (cd "$PROJECT_DIR" && python3 - <<'PY'
+import sqlite3
+import sys
+
+try:
+    conn = sqlite3.connect("data.db")
+    row = conn.execute(
+        "select value from settings where key = 'install_completed'"
+    ).fetchone()
+    conn.close()
+except sqlite3.Error:
+    sys.exit(1)
+
+sys.exit(0 if row and row[0] == "true" else 1)
+PY
+  )
+  then
+    echo "检测到本项目已经完成安装。"
+    echo "后续升级请运行: bash scripts/upgrade.sh"
+    echo "如需重新安装，请先手动备份并删除 data.db。"
+    exit 1
+  fi
+fi
 
 if [ -n "${VIRTUAL_ENV:-}" ]; then
   echo "检测到当前处于 Python 虚拟环境，安装向导将退出该环境后继续。"

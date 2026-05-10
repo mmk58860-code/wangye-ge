@@ -5,6 +5,9 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 cd "$PROJECT_DIR"
 
+echo "=== wangye-ge 升级脚本 ==="
+echo "此脚本用于已安装机器后续升级；新机器首次安装请运行: bash scripts/install.sh"
+
 if [ ! -f data.db ]; then
   echo "未检测到安装数据。请先运行安装向导: bash scripts/install.sh"
   exit 1
@@ -27,7 +30,7 @@ if not row or row[0] != "true":
     sys.exit(1)
 PY
 
-echo "=== wangye-ge 强制升级中 ==="
+echo "开始从 GitHub 拉取并升级..."
 
 git fetch --all
 git reset --hard origin/main
