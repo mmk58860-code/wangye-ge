@@ -13,6 +13,17 @@ fi
 read -p "请输入网页访问端口 (默认 80): " WEB_PORT
 WEB_PORT=${WEB_PORT:-80}
 
+while true; do
+  read -p "请输入后端服务端口 (默认 18000): " BACKEND_PORT
+  BACKEND_PORT=${BACKEND_PORT:-18000}
+
+  if [ "$WEB_PORT" = "$BACKEND_PORT" ]; then
+    echo "后端端口不能和网页访问端口相同，请重新输入。"
+  else
+    break
+  fi
+done
+
 read -p "请输入网页管理员账号 (默认 admin): " ADMIN_USER
 ADMIN_USER=${ADMIN_USER:-admin}
 
@@ -30,11 +41,6 @@ while true; do
     break
   fi
 done
-
-BACKEND_PORT=18000
-if [ "$WEB_PORT" = "$BACKEND_PORT" ]; then
-  BACKEND_PORT=18001
-fi
 
 echo "安装系统依赖..."
 sudo apt-get update

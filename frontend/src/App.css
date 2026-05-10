@@ -114,6 +114,26 @@ body {
   gap: 20px;
 }
 
+.empty-state {
+  background: #ffffff;
+  border: 1px solid #dfe7ee;
+  border-radius: 8px;
+  grid-column: 1 / -1;
+  max-width: 560px;
+  padding: 24px;
+}
+
+.empty-state h3 {
+  color: #2c3e50;
+  margin: 0 0 10px;
+}
+
+.empty-state p,
+.muted {
+  color: #667582;
+  line-height: 1.6;
+}
+
 .subnet-card {
   background: var(--card-bg);
   border-radius: 10px;
@@ -161,4 +181,67 @@ button {
   color: white;
   border: none;
   cursor: pointer;
+}
+
+.settings-page {
+  max-width: 760px;
+}
+
+.settings-panel {
+  background: #ffffff;
+  border: 1px solid #dfe7ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 20px;
+}
+
+.settings-panel h3 {
+  color: #2c3e50;
+  margin: 0;
+}
+
+.settings-panel button,
+.empty-state button {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: center;
+  width: fit-content;
+}
+
+.settings-message {
+  color: #2c3e50;
+  font-size: 0.9rem;
+}
+
+.api-key-list {
+  display: grid;
+  gap: 10px;
+}
+
+.api-key-row {
+  align-items: center;
+  border: 1px solid #edf1f4;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.api-key-row strong,
+.api-key-row span {
+  display: block;
+}
+
+.api-key-row span {
+  color: #667582;
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+.api-key-row button {
+  background: #c0392b;
+  padding: 8px 10px;
 }
