@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { LayoutDashboard, Flame, Settings, FileText, Bell } from 'lucide-react';
+import { LayoutDashboard, Flame, Settings, FileText, LogOut } from 'lucide-react';
 import './App.css';
 
 interface Subnet {
@@ -16,20 +16,52 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [subnets, setSubnets] = useState<Subnet[]>([]);
   const [sortBy, setSortBy] = useState('id');
+  const [token, setToken] = useState(() => localStorage.getItem('adminToken') || '');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 10000);
-    return () => clearInterval(interval);
-  }, []);
+    if (!token) return;
 
-  const fetchData = async () => {
+    fetchData(token);
+    const interval = setInterval(() => fetchData(token), 10000);
+    return () => clearInterval(interval);
+  }, [token]);
+
+  const fetchData = async (authToken: string) => {
     try {
-      const res = await axios.get('http://localhost:8000/api/subnets');
+      const res = await axios.get('/api/subnets', {
+        headers: { 'X-Admin-Token': authToken },
+      });
       setSubnets(res.data);
     } catch (err) {
       console.error(err);
+      if (axios.isAxiosError(err) && err.response?.status === 401) {
+        localStorage.removeItem('adminToken');
+        setToken('');
+      }
     }
+  };
+
+  const handleLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setLoginError('');
+
+    try {
+      const res = await axios.post('/api/login', { username, password });
+      localStorage.setItem('adminToken', res.data.token);
+      setToken(res.data.token);
+      setPassword('');
+    } catch (err) {
+      setLoginError('账号或密码不正确');
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('adminToken');
+    setToken('');
+    setSubnets([]);
   };
 
   const sortedSubnets = [...subnets].sort((a, b) => {
@@ -38,6 +70,30 @@ function App() {
     if (sortBy === 'price') return b.alpha_price - a.alpha_price;
     return 0;
   });
+
+  if (!token) {
+    return (
+      <div className="login-page">
+        <form className="login-panel" onSubmit={handleLogin}>
+          <h1>wangye-ge</h1>
+          <input
+            autoFocus
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="管理员账号"
+          />
+          <input
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="管理员密码"
+            type="password"
+          />
+          {loginError && <div className="login-error">{loginError}</div>}
+          <button type="submit">登录</button>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="layout">
@@ -55,6 +111,9 @@ function App() {
         <div className={`nav-item ${activeTab === 'logs' ? 'active' : ''}`} onClick={() => setActiveTab('logs')}>
           <FileText size={20} /> 运行日志
         </div>
+        <button className="logout-button" onClick={handleLogout}>
+          <LogOut size={18} /> 退出登录
+        </button>
       </div>
 
       <div className="main-content">
