@@ -5,6 +5,11 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "=== wangye-ge Bittensor Dashboard 安装向导 ==="
 
+if [ -n "${VIRTUAL_ENV:-}" ]; then
+  echo "检测到当前处于 Python 虚拟环境，安装向导将退出该环境后继续。"
+  deactivate 2>/dev/null || true
+fi
+
 read -p "请输入网页访问端口 (默认 80): " WEB_PORT
 WEB_PORT=${WEB_PORT:-80}
 
@@ -33,7 +38,18 @@ fi
 
 echo "安装系统依赖..."
 sudo apt-get update
-sudo apt-get install -y python3-pip python3-venv nodejs npm git nginx
+sudo apt-get install -y python3-pip python3-venv nodejs git nginx
+
+if ! command -v npm >/dev/null 2>&1; then
+  sudo apt-get install -y npm
+fi
+
+for cmd in python3 node npm nginx git; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "依赖安装失败，未找到命令: $cmd"
+    exit 1
+  fi
+done
 
 echo "配置后端..."
 cd "$PROJECT_DIR"
@@ -59,6 +75,10 @@ npm run build
 
 echo "配置 PM2 后端服务..."
 sudo npm install -g pm2
+if ! command -v pm2 >/dev/null 2>&1; then
+  echo "PM2 安装失败，请检查 npm 全局安装路径。"
+  exit 1
+fi
 pm2 delete wangye-ge-backend 2>/dev/null || true
 pm2 start "$PROJECT_DIR/backend/venv/bin/python" \
   --name wangye-ge-backend \
@@ -102,6 +122,16 @@ if command -v ufw >/dev/null 2>&1 && sudo ufw status | grep -q "Status: active";
 fi
 
 SERVER_IP=$(hostname -I | awk '{print $1}')
+
+if [ ! -f "$PROJECT_DIR/frontend/build/index.html" ]; then
+  echo "前端构建失败，未找到 $PROJECT_DIR/frontend/build/index.html"
+  exit 1
+fi
+
+if ! curl -fsS "http://127.0.0.1:$WEB_PORT" >/dev/null; then
+  echo "本机访问 http://127.0.0.1:$WEB_PORT 失败，请检查 Nginx 状态。"
+  exit 1
+fi
 
 echo ""
 echo "安装完成！"
