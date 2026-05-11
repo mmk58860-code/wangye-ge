@@ -29,7 +29,7 @@ bash scripts/upgrade.sh
 4.  **数据分析**: 北京时间 TAO 质押/解质押 Alpha 全网数据。
 5.  **系统管理**:
     *   API 池管理: 支持多个 Dwellir API Key，自定义频率限制 (Rate Limiting)。
-    *   日志系统: 保存 24 小时运行日志（北京时间）。
+    *   日志系统: 严格按北京时间只保留最近 48 小时运行日志。
     *   通知系统: 支持 Telegram Bot 推送。
 6.  **部署与升级**:
     *   首次安装: 必须运行 `bash scripts/install.sh`，交互式设置网页端口、后端端口、网页管理员账号和密码。
