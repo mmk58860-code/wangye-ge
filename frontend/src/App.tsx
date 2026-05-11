@@ -28,6 +28,23 @@ interface SystemLog {
   module: string;
 }
 
+interface DailyStakeStats {
+  date: string;
+  timezone: string;
+  start_block: number;
+  scanned_to_block: number;
+  current_block: number;
+  stake_tao: number;
+  unstake_tao: number;
+  stake_alpha: number;
+  unstake_alpha: number;
+  stake_events: number;
+  unstake_events: number;
+  scanning: boolean;
+  complete: boolean;
+  last_error: string;
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [subnets, setSubnets] = useState<Subnet[]>([]);
@@ -42,6 +59,8 @@ function App() {
   const [apiKeyMessage, setApiKeyMessage] = useState('');
   const [logs, setLogs] = useState<SystemLog[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [dailyStakeStats, setDailyStakeStats] = useState<DailyStakeStats | null>(null);
+  const [stakeStatsSyncing, setStakeStatsSyncing] = useState(false);
 
   const authHeaders = (authToken = token) => ({ 'X-Admin-Token': authToken });
 
@@ -51,6 +70,7 @@ function App() {
     fetchData(token);
     fetchApiKeys(token);
     fetchLogs(token);
+    fetchDailyStakeStats(token);
     const interval = setInterval(() => fetchData(token), 10000);
     return () => clearInterval(interval);
   }, [token]);
@@ -147,6 +167,32 @@ function App() {
     }
   };
 
+  const fetchDailyStakeStats = async (authToken = token) => {
+    if (!authToken) return;
+
+    try {
+      const res = await axios.get('/api/daily-stake-stats', {
+        headers: authHeaders(authToken),
+      });
+      setDailyStakeStats(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleStakeStatsSync = async () => {
+    setStakeStatsSyncing(true);
+    try {
+      const res = await axios.post('/api/daily-stake-stats/sync', {}, {
+        headers: authHeaders(),
+      });
+      setDailyStakeStats(res.data);
+      await fetchLogs(token);
+    } finally {
+      setStakeStatsSyncing(false);
+    }
+  };
+
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
     setLoginError('');
@@ -225,6 +271,44 @@ function App() {
       <div className="main-content">
         {activeTab === 'dashboard' && (
           <>
+            <div className="stake-summary">
+              <div className="page-header">
+                <div>
+                  <h2>北京时间今日质押/解质押</h2>
+                  <p>
+                    {dailyStakeStats?.date || '等待统计'} · 
+                    {dailyStakeStats?.complete ? ' 已完成' : ' 分批扫描中'}
+                  </p>
+                </div>
+                <button onClick={handleStakeStatsSync} disabled={stakeStatsSyncing}>
+                  <RefreshCw size={18} /> {stakeStatsSyncing ? '统计中' : '刷新统计'}
+                </button>
+              </div>
+              <div className="metric-grid">
+                <div className="metric-card">
+                  <span>今日质押 TAO</span>
+                  <strong>{(dailyStakeStats?.stake_tao || 0).toFixed(4)}</strong>
+                </div>
+                <div className="metric-card">
+                  <span>今日解质押 TAO</span>
+                  <strong>{(dailyStakeStats?.unstake_tao || 0).toFixed(4)}</strong>
+                </div>
+                <div className="metric-card">
+                  <span>质押事件</span>
+                  <strong>{dailyStakeStats?.stake_events || 0}</strong>
+                </div>
+                <div className="metric-card">
+                  <span>解质押事件</span>
+                  <strong>{dailyStakeStats?.unstake_events || 0}</strong>
+                </div>
+              </div>
+              {dailyStakeStats && (
+                <p className="muted">
+                  扫描区块: {dailyStakeStats.scanned_to_block || 0}/{dailyStakeStats.current_block || 0}
+                  {dailyStakeStats.last_error ? ` · ${dailyStakeStats.last_error}` : ''}
+                </p>
+              )}
+            </div>
             <div className="controls">
               <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
                 <option value="id">按 ID 排序</option>

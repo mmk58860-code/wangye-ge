@@ -10,6 +10,7 @@ from .api_manager import api_manager
 from .api_manager import normalize_dwellir_key
 from .data_fetcher import data_update_loop, subnet_data_manager
 from .event_monitor import event_monitor
+from .stake_stats import daily_stake_stats
 from .security import assert_install_complete, authenticate_admin, require_admin
 from .logging_utils import write_log
 
@@ -56,11 +57,24 @@ async def get_subnets(_: bool = Depends(require_admin)):
 async def sync_data(_: bool = Depends(require_admin)):
     api_manager.refresh_keys()
     await subnet_data_manager.update_data()
+    if api_manager.keys:
+        await asyncio.to_thread(daily_stake_stats.scan, api_manager.keys[0].key_value)
     return {
         "status": "success",
         "subnet_count": len(subnet_data_manager.subnets),
         "current_block": subnet_data_manager.current_block,
     }
+
+@app.get("/api/daily-stake-stats")
+async def get_daily_stake_stats(_: bool = Depends(require_admin)):
+    return daily_stake_stats.stats.as_dict()
+
+@app.post("/api/daily-stake-stats/sync")
+async def sync_daily_stake_stats(_: bool = Depends(require_admin)):
+    api_manager.refresh_keys()
+    if not api_manager.keys:
+        raise HTTPException(status_code=400, detail="No Dwellir API Key configured")
+    return await asyncio.to_thread(daily_stake_stats.scan, api_manager.keys[0].key_value)
 
 @app.get("/api/racing")
 async def get_racing(_: bool = Depends(require_admin)):

@@ -345,6 +345,27 @@ button:disabled {
   margin-bottom: 18px;
 }
 
+.stake-summary {
+  background: #ffffff;
+  border: 1px solid #dfe7ee;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  padding: 18px;
+}
+
+.stake-summary .page-header {
+  margin-bottom: 16px;
+}
+
+.stake-summary h2 {
+  margin: 0 0 4px;
+}
+
+.stake-summary p {
+  color: var(--muted-color);
+  margin: 0;
+}
+
 .metric-card,
 .risk-panel {
   background: #ffffff;
