@@ -34,6 +34,8 @@ def fetch_with_bittensor_sdk(api_key: str):
     parsed = {}
     for subnet in dynamic_subnets:
         netuid = int(getattr(subnet, "netuid", 0))
+        if netuid == 0:
+            continue
         registration_block = int(getattr(subnet, "network_registered_at", 0) or 0)
         immunity_period = 5000
         immunity_left = max(0, immunity_period - (current_block - registration_block))
@@ -99,6 +101,8 @@ class SubnetData:
                 new_subnets = {}
                 for info in dynamic_info:
                     netuid = info.get('netuid')
+                    if netuid == 0:
+                        continue
                     new_subnets[netuid] = {
                         "name": info.get('name', f"Subnet {netuid}"),
                         "netuid": netuid,

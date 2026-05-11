@@ -60,7 +60,7 @@ function App() {
       const res = await axios.get('/api/subnets', {
         headers: authHeaders(authToken),
       });
-      setSubnets(res.data);
+      setSubnets(res.data.filter((subnet: Subnet) => subnet.netuid !== 0));
     } catch (err) {
       console.error(err);
       if (axios.isAxiosError(err) && err.response?.status === 401) {

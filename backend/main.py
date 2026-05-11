@@ -50,7 +50,7 @@ async def check_auth(_: bool = Depends(require_admin)):
 
 @app.get("/api/subnets")
 async def get_subnets(_: bool = Depends(require_admin)):
-    return list(subnet_data_manager.subnets.values())
+    return [s for s in subnet_data_manager.subnets.values() if s.get("netuid") != 0]
 
 @app.post("/api/sync")
 async def sync_data(_: bool = Depends(require_admin)):
