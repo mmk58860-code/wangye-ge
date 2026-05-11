@@ -19,6 +19,18 @@ def balance_to_float(value):
         return 0
 
 
+def first_int_attr(obj, names, default=0):
+    for name in names:
+        value = getattr(obj, name, None)
+        if value is None:
+            continue
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            continue
+    return default
+
+
 def fetch_with_bittensor_sdk(api_key: str):
     import bittensor as bt
 
@@ -36,8 +48,17 @@ def fetch_with_bittensor_sdk(api_key: str):
         netuid = int(getattr(subnet, "netuid", 0))
         if netuid == 0:
             continue
-        registration_block = int(getattr(subnet, "network_registered_at", 0) or 0)
-        immunity_period = 5000
+        registration_block = first_int_attr(
+            subnet,
+            ["network_registered_at", "registration_block", "registered_at", "block_at_registration"],
+            0,
+        )
+        immunity_period = 0
+        try:
+            hyperparameters = subtensor.get_subnet_hyperparameters(netuid)
+            immunity_period = int(getattr(hyperparameters, "immunity_period", 0) or 0)
+        except Exception:
+            immunity_period = 0
         immunity_left = max(0, immunity_period - (current_block - registration_block))
 
         parsed[netuid] = {
