@@ -10,3 +10,4 @@ asyncio
 python-telegram-bot
 tzlocal
 pytz
+bittensor

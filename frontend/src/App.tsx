@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { LayoutDashboard, Flame, Settings, FileText, LogOut, Plus, Trash2 } from 'lucide-react';
+import { LayoutDashboard, Flame, Settings, FileText, LogOut, Plus, Trash2, RefreshCw } from 'lucide-react';
 import './App.css';
 
 interface Subnet {
@@ -20,6 +20,14 @@ interface ApiKey {
   requests_per_second: number;
 }
 
+interface SystemLog {
+  id: number;
+  timestamp: string;
+  level: string;
+  message: string;
+  module: string;
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [subnets, setSubnets] = useState<Subnet[]>([]);
@@ -32,6 +40,8 @@ function App() {
   const [newApiKey, setNewApiKey] = useState('');
   const [newApiKeyDescription, setNewApiKeyDescription] = useState('');
   const [apiKeyMessage, setApiKeyMessage] = useState('');
+  const [logs, setLogs] = useState<SystemLog[]>([]);
+  const [syncing, setSyncing] = useState(false);
 
   const authHeaders = (authToken = token) => ({ 'X-Admin-Token': authToken });
 
@@ -40,6 +50,7 @@ function App() {
 
     fetchData(token);
     fetchApiKeys(token);
+    fetchLogs(token);
     const interval = setInterval(() => fetchData(token), 10000);
     return () => clearInterval(interval);
   }, [token]);
@@ -95,7 +106,7 @@ function App() {
       setNewApiKeyDescription('');
       setApiKeyMessage('API Key 已添加，后台会自动开始同步数据。');
       fetchApiKeys();
-      fetchData(token);
+      handleSync();
     } catch (err) {
       setApiKeyMessage('添加失败，请检查 Key 是否重复或后端日志。');
     }
@@ -106,6 +117,34 @@ function App() {
       headers: authHeaders(),
     });
     fetchApiKeys();
+  };
+
+  const fetchLogs = async (authToken = token) => {
+    if (!authToken) return;
+
+    try {
+      const res = await axios.get('/api/logs', {
+        headers: authHeaders(authToken),
+      });
+      setLogs(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await axios.post('/api/sync', {}, { headers: authHeaders() });
+      await fetchData(token);
+      await fetchLogs(token);
+      setApiKeyMessage('已触发同步，请查看看板和运行日志。');
+    } catch (err) {
+      setApiKeyMessage('同步失败，请查看运行日志。');
+      await fetchLogs(token);
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const handleLogin = async (event: React.FormEvent) => {
@@ -189,6 +228,9 @@ function App() {
                 <option value="ema">按 EMA 排序</option>
                 <option value="price">按价格排序</option>
               </select>
+              <button onClick={handleSync} disabled={syncing}>
+                <RefreshCw size={18} /> {syncing ? '同步中' : '立即同步'}
+              </button>
             </div>
             <div className="card-grid">
               {sortedSubnets.length === 0 && (
@@ -233,6 +275,9 @@ function App() {
                 <button type="submit">
                   <Plus size={18} /> 添加 Key
                 </button>
+                <button type="button" onClick={handleSync} disabled={syncing}>
+                  <RefreshCw size={18} /> {syncing ? '同步中' : '立即同步'}
+                </button>
                 {apiKeyMessage && <div className="settings-message">{apiKeyMessage}</div>}
               </form>
 
@@ -257,6 +302,34 @@ function App() {
                 )}
               </div>
            </div>
+        )}
+
+        {activeTab === 'logs' && (
+          <div className="logs-page">
+            <div className="page-header">
+              <h2>运行日志</h2>
+              <button onClick={() => fetchLogs()}>
+                <RefreshCw size={18} /> 刷新
+              </button>
+            </div>
+            {logs.length === 0 ? (
+              <div className="empty-state">
+                <h3>暂无日志</h3>
+                <p>点击“立即同步”后，如果后端遇到 API、网络或解析问题，会在这里显示。</p>
+              </div>
+            ) : (
+              <div className="log-list">
+                {logs.map((log) => (
+                  <div className={`log-row level-${log.level.toLowerCase()}`} key={log.id}>
+                    <span>{new Date(log.timestamp).toLocaleString()}</span>
+                    <strong>{log.level}</strong>
+                    <em>{log.module}</em>
+                    <p>{log.message}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

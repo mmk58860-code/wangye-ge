@@ -7,9 +7,11 @@ from pydantic import BaseModel
 from .database import get_db, init_db
 from .models import ApiKey, Setting, SystemLog
 from .api_manager import api_manager
+from .api_manager import normalize_dwellir_key
 from .data_fetcher import data_update_loop, subnet_data_manager
 from .event_monitor import event_monitor
 from .security import assert_install_complete, authenticate_admin, require_admin
+from .logging_utils import write_log
 
 app = FastAPI(title="Bittensor Dashboard API")
 
@@ -50,6 +52,16 @@ async def check_auth(_: bool = Depends(require_admin)):
 async def get_subnets(_: bool = Depends(require_admin)):
     return list(subnet_data_manager.subnets.values())
 
+@app.post("/api/sync")
+async def sync_data(_: bool = Depends(require_admin)):
+    api_manager.refresh_keys()
+    await subnet_data_manager.update_data()
+    return {
+        "status": "success",
+        "subnet_count": len(subnet_data_manager.subnets),
+        "current_block": subnet_data_manager.current_block,
+    }
+
 @app.get("/api/racing")
 async def get_racing(_: bool = Depends(require_admin)):
     return subnet_data_manager.get_racing_stats()
@@ -82,14 +94,16 @@ async def get_api_keys(_: bool = Depends(require_admin), db: Session = Depends(g
 
 @app.post("/api/api-keys")
 async def add_api_key(data: dict, _: bool = Depends(require_admin), db: Session = Depends(get_db)):
+    key_value = normalize_dwellir_key(data["key_value"])
     new_key = ApiKey(
-        key_value=data["key_value"],
+        key_value=key_value,
         description=data.get("description", ""),
         requests_per_second=data.get("requests_per_second", 20)
     )
     db.add(new_key)
     db.commit()
     api_manager.refresh_keys()
+    write_log("INFO", "已添加 Dwellir API Key。", "api_manager")
     return {"status": "success"}
 
 @app.delete("/api/api-keys/{key_id}")

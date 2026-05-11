@@ -2,9 +2,11 @@ import asyncio
 import websockets
 import json
 from .api_manager import api_manager
+from .api_manager import normalize_dwellir_key
 from .notifications import send_telegram_notification
 from .models import SystemLog, get_beijing_time, ApiKey
 from .database import SessionLocal
+from .logging_utils import write_log
 
 class EventMonitor:
     def __init__(self):
@@ -23,11 +25,11 @@ class EventMonitor:
                 db.close()
                 
                 if not api_key_obj:
-                    print("No API key for WSS. Waiting...")
+                    write_log("WARN", "没有可用的 Dwellir API Key，WebSocket 监控等待中。", "event_monitor")
                     await asyncio.sleep(10)
                     continue
 
-                full_url = f"{self.wss_url}/{api_key_obj.key_value}"
+                full_url = f"{self.wss_url}/{normalize_dwellir_key(api_key_obj.key_value)}"
                 async with websockets.connect(full_url) as ws:
                     # Subscribe to new heads
                     subscribe_msg = {
@@ -47,7 +49,7 @@ class EventMonitor:
                             block_hash = data["params"]["result"]["hash"]
                             await self.process_block(block_number, block_hash)
             except Exception as e:
-                print(f"WSS Error: {e}")
+                write_log("ERROR", f"WebSocket 监控异常: {e}", "event_monitor")
                 await asyncio.sleep(5)
 
     async def process_block(self, block_number, block_hash):

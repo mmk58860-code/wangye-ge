@@ -3,9 +3,28 @@ import aiohttp
 import time
 import random
 from typing import List, Optional, Dict
+from urllib.parse import urlparse
 from sqlalchemy.orm import Session
 from .models import ApiKey, SystemLog, get_beijing_time
 from .database import SessionLocal
+from .logging_utils import write_log
+
+
+def normalize_dwellir_key(value: str) -> str:
+    value = (value or "").strip().rstrip("/")
+    if "://" not in value:
+        return value
+
+    parsed = urlparse(value)
+    path_parts = [part for part in parsed.path.split("/") if part]
+    return path_parts[-1] if path_parts else value
+
+
+def mask_key(value: str) -> str:
+    normalized = normalize_dwellir_key(value)
+    if len(normalized) <= 12:
+        return "***"
+    return f"{normalized[:8]}...{normalized[-4:]}"
 
 class TokenBucket:
     def __init__(self, rate: float, capacity: float):
@@ -39,12 +58,13 @@ class ApiPoolManager:
         try:
             self.keys = db.query(ApiKey).filter(ApiKey.enabled == True).all()
             for k in self.keys:
-                if k.key_value not in self.buckets:
-                    self.buckets[k.key_value] = TokenBucket(k.requests_per_second, k.requests_per_second)
+                normalized_key = normalize_dwellir_key(k.key_value)
+                if normalized_key not in self.buckets:
+                    self.buckets[normalized_key] = TokenBucket(k.requests_per_second, k.requests_per_second)
                 else:
                     # Update rate if changed
-                    self.buckets[k.key_value].rate = k.requests_per_second
-                    self.buckets[k.key_value].capacity = k.requests_per_second
+                    self.buckets[normalized_key].rate = k.requests_per_second
+                    self.buckets[normalized_key].capacity = k.requests_per_second
         finally:
             db.close()
 
@@ -60,7 +80,8 @@ class ApiPoolManager:
             key = self.keys[self.current_index]
             self.current_index = (self.current_index + 1) % len(self.keys)
             
-            if await self.buckets[key.key_value].consume():
+            normalized_key = normalize_dwellir_key(key.key_value)
+            if await self.buckets[normalized_key].consume():
                 if await self.global_bucket.consume():
                     return key
         
@@ -68,14 +89,16 @@ class ApiPoolManager:
         await asyncio.sleep(0.1)
         return await self.get_next_available_key()
 
-    async def call_rpc(self, method: str, params: list = [], retries: int = 3) -> Optional[dict]:
+    async def call_rpc(self, method: str, params: Optional[list] = None, retries: int = 3) -> Optional[dict]:
+        params = params or []
         for attempt in range(retries):
             key_obj = await self.get_next_available_key()
             if not key_obj:
-                print("No API keys available.")
+                write_log("WARN", "没有可用的 Dwellir API Key，请先在系统设置中添加。", "api_manager")
                 return None
 
-            url = f"https://api-bittensor-mainnet.n.dwellir.com/{key_obj.key_value}"
+            normalized_key = normalize_dwellir_key(key_obj.key_value)
+            url = f"https://api-bittensor-mainnet.n.dwellir.com/{normalized_key}"
             payload = {
                 "jsonrpc": "2.0",
                 "method": method,
@@ -91,13 +114,13 @@ class ApiPoolManager:
                             if "result" in data:
                                 return data["result"]
                             else:
-                                print(f"RPC Error: {data.get('error')}")
+                                write_log("ERROR", f"RPC 调用 {method} 返回错误: {data.get('error')}", "api_manager")
                         elif response.status == 429:
-                            print(f"Rate limited on key {key_obj.key_value[:8]}...")
+                            write_log("WARN", f"Dwellir API Key {mask_key(normalized_key)} 触发限流。", "api_manager")
                         else:
-                            print(f"HTTP Error {response.status} on key {key_obj.key_value[:8]}...")
+                            write_log("ERROR", f"RPC HTTP {response.status}: {method}, key={mask_key(normalized_key)}", "api_manager")
             except Exception as e:
-                print(f"Request Exception: {e}")
+                write_log("ERROR", f"RPC 请求异常: {method}: {e}", "api_manager")
             
             await asyncio.sleep(0.5 * (attempt + 1))
         
