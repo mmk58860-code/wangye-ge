@@ -173,6 +173,9 @@ function App() {
     if (sortBy === 'price') return b.alpha_price - a.alpha_price;
     return 0;
   });
+  const nonImmuneSubnets = subnets.filter((s) => !s.is_immune).sort((a, b) => a.ema - b.ema);
+  const immuneSubnets = subnets.filter((s) => s.is_immune);
+  const evictionCandidate = nonImmuneSubnets[0];
 
   if (!token) {
     return (
@@ -255,6 +258,71 @@ function App() {
               ))}
             </div>
           </>
+        )}
+
+        {activeTab === 'racing' && (
+          <div className="racing-page">
+            <div className="page-header">
+              <h2>赛马机制</h2>
+              <button onClick={handleSync} disabled={syncing}>
+                <RefreshCw size={18} /> {syncing ? '同步中' : '立即同步'}
+              </button>
+            </div>
+
+            {subnets.length === 0 ? (
+              <div className="empty-state">
+                <h3>暂无赛马数据</h3>
+                <p>请先在系统设置添加 Dwellir API Key，然后点击立即同步。</p>
+                <button onClick={() => setActiveTab('settings')}>去系统设置</button>
+              </div>
+            ) : (
+              <>
+                <div className="metric-grid">
+                  <div className="metric-card">
+                    <span>当前子网</span>
+                    <strong>{subnets.length}</strong>
+                  </div>
+                  <div className="metric-card">
+                    <span>最大容量</span>
+                    <strong>128</strong>
+                  </div>
+                  <div className="metric-card">
+                    <span>非免疫期</span>
+                    <strong>{nonImmuneSubnets.length}</strong>
+                  </div>
+                  <div className="metric-card">
+                    <span>免疫期</span>
+                    <strong>{immuneSubnets.length}</strong>
+                  </div>
+                </div>
+
+                {evictionCandidate && (
+                  <div className="risk-panel">
+                    <h3>当前最低 EMA</h3>
+                    <div className="risk-subnet">
+                      <strong>{evictionCandidate.name} (SN{evictionCandidate.netuid})</strong>
+                      <span>EMA: {evictionCandidate.ema.toFixed(4)}</span>
+                      <span>Alpha 价格: τ{evictionCandidate.alpha_price.toFixed(4)}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="settings-panel">
+                  <h3>非免疫期子网，按 EMA 从低到高</h3>
+                  <div className="racing-list">
+                    {nonImmuneSubnets.slice(0, 30).map((subnet, index) => (
+                      <div className="racing-row" key={subnet.netuid}>
+                        <span>#{index + 1}</span>
+                        <strong>{subnet.name} (SN{subnet.netuid})</strong>
+                        <em>EMA {subnet.ema.toFixed(4)}</em>
+                        <em>τ{subnet.alpha_price.toFixed(4)}</em>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         )}
         
         {activeTab === 'settings' && (

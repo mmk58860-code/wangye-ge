@@ -45,8 +45,13 @@ class EventMonitor:
                         data = json.loads(response)
                         
                         if "method" in data and data["method"] == "chain_newHead":
-                            block_number = int(data["params"]["result"]["number"], 16)
-                            block_hash = data["params"]["result"]["hash"]
+                            header = data.get("params", {}).get("result", {})
+                            block_number = int(header.get("number", "0x0"), 16)
+                            block_hash = header.get("hash")
+                            if not block_hash and block_number:
+                                block_hash = await api_manager.call_rpc("chain_getBlockHash", [block_number], retries=1)
+                            if not block_hash:
+                                continue
                             await self.process_block(block_number, block_hash)
             except Exception as e:
                 write_log("ERROR", f"WebSocket 监控异常: {e}", "event_monitor")
