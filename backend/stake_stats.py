@@ -13,11 +13,19 @@ from .models import BEIJING_TZ
 
 BLOCK_SECONDS = 12
 RAO_PER_TAO = 1_000_000_000
-MAX_BLOCKS_PER_SCAN = 500
+MAX_BLOCKS_PER_SCAN = 50
+BALANCE_FIELD_HINTS = ("amount", "stake", "tao", "alpha", "balance")
+NON_AMOUNT_FIELD_HINTS = ("account", "coldkey", "hotkey", "delegate", "owner", "netuid", "uid")
 
 
 def amount_to_float(value: Any) -> float:
     if value is None:
+        return 0
+    if isinstance(value, dict):
+        if "value" in value:
+            return amount_to_float(value["value"])
+        if "data" in value:
+            return amount_to_float(value["data"])
         return 0
     if hasattr(value, "tao"):
         return float(value.tao)
@@ -65,15 +73,23 @@ def event_attributes(event: Any):
 def extract_amounts(event: Any):
     tao_total = 0.0
     alpha_total = 0.0
-    fallback_amounts = []
 
     for attr in event_attributes(event):
         if isinstance(attr, dict):
             name = str(attr.get("name", "")).lower()
+            attr_type = str(attr.get("type", "")).lower()
             value = attr.get("value")
         else:
             name = str(getattr(attr, "name", "")).lower()
+            attr_type = str(getattr(attr, "type", "")).lower()
             value = getattr(attr, "value", None)
+
+        field_hint = f"{name} {attr_type}"
+        if any(hint in field_hint for hint in NON_AMOUNT_FIELD_HINTS):
+            continue
+
+        if not any(hint in field_hint for hint in BALANCE_FIELD_HINTS):
+            continue
 
         amount = amount_to_float(value)
         if amount <= 0:
@@ -81,13 +97,8 @@ def extract_amounts(event: Any):
 
         if "alpha" in name:
             alpha_total += amount
-        elif "tao" in name or "amount" in name or "stake" in name:
-            tao_total += amount
         else:
-            fallback_amounts.append(amount)
-
-    if tao_total == 0 and alpha_total == 0 and fallback_amounts:
-        tao_total = max(fallback_amounts)
+            tao_total += amount
 
     return tao_total, alpha_total
 
@@ -199,6 +210,7 @@ class DailyStakeStatsManager:
                 self.stats.scanned_to_block = block_number
 
             self.stats.updated_at = time.time()
+            self.stats.last_error = ""
             if self.stats.scanned_to_block >= current_block:
                 write_log("INFO", "北京时间当日质押/解质押统计扫描完成。", "stake_stats")
             else:

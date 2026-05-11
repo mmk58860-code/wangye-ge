@@ -71,8 +71,14 @@ function App() {
     fetchApiKeys(token);
     fetchLogs(token);
     fetchDailyStakeStats(token);
-    const interval = setInterval(() => fetchData(token), 10000);
-    return () => clearInterval(interval);
+    const dataInterval = setInterval(() => fetchData(token), 10000);
+    const statsReadInterval = setInterval(() => fetchDailyStakeStats(token), 15000);
+    const statsSyncInterval = setInterval(() => syncDailyStakeStats(token, true), 60000);
+    return () => {
+      clearInterval(dataInterval);
+      clearInterval(statsReadInterval);
+      clearInterval(statsSyncInterval);
+    };
   }, [token]);
 
   const fetchData = async (authToken: string) => {
@@ -180,18 +186,21 @@ function App() {
     }
   };
 
-  const handleStakeStatsSync = async () => {
-    setStakeStatsSyncing(true);
+  const syncDailyStakeStats = async (authToken = token, silent = false) => {
+    if (!authToken) return;
+    if (!silent) setStakeStatsSyncing(true);
     try {
       const res = await axios.post('/api/daily-stake-stats/sync', {}, {
-        headers: authHeaders(),
+        headers: authHeaders(authToken),
       });
       setDailyStakeStats(res.data);
-      await fetchLogs(token);
+      if (!silent) await fetchLogs(authToken);
     } finally {
-      setStakeStatsSyncing(false);
+      if (!silent) setStakeStatsSyncing(false);
     }
   };
+
+  const handleStakeStatsSync = () => syncDailyStakeStats(token, false);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -277,7 +286,7 @@ function App() {
                   <h2>北京时间今日质押/解质押</h2>
                   <p>
                     {dailyStakeStats?.date || '等待统计'} · 
-                    {dailyStakeStats?.complete ? ' 已完成' : ' 分批扫描中'}
+                    {dailyStakeStats?.complete ? ' 已完成' : ' 自动分批扫描中'}
                   </p>
                 </div>
                 <button onClick={handleStakeStatsSync} disabled={stakeStatsSyncing}>
@@ -306,6 +315,7 @@ function App() {
                 <p className="muted">
                   扫描区块: {dailyStakeStats.scanned_to_block || 0}/{dailyStakeStats.current_block || 0}
                   {dailyStakeStats.last_error ? ` · ${dailyStakeStats.last_error}` : ''}
+                  {!dailyStakeStats.complete ? ' · 系统每分钟自动推进一次' : ''}
                 </p>
               )}
             </div>

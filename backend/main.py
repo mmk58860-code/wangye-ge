@@ -21,6 +21,17 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
+
+async def stake_stats_update_loop():
+    while True:
+        await asyncio.sleep(60)
+        try:
+            api_manager.refresh_keys()
+            if api_manager.keys:
+                await asyncio.to_thread(daily_stake_stats.scan, api_manager.keys[0].key_value)
+        except Exception as e:
+            write_log("ERROR", f"自动刷新质押/解质押统计失败: {e}", "stake_stats")
+
 # CORS for frontend
 app.add_middleware(
     CORSMiddleware,
@@ -37,6 +48,7 @@ async def startup_event():
     # Start background tasks
     asyncio.create_task(data_update_loop())
     asyncio.create_task(event_monitor.start())
+    asyncio.create_task(stake_stats_update_loop())
     api_manager.refresh_keys()
 
 @app.post("/api/login")
