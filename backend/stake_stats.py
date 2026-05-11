@@ -16,6 +16,7 @@ RAO_PER_TAO = 1_000_000_000
 MAX_BLOCKS_PER_SCAN = 50
 BALANCE_FIELD_HINTS = ("amount", "stake", "tao", "alpha", "balance")
 NON_AMOUNT_FIELD_HINTS = ("account", "coldkey", "hotkey", "delegate", "owner", "netuid", "uid")
+TOTAL_FIELD_HINTS = ("increased", "decreased", "total")
 
 
 def amount_to_float(value: Any) -> float:
@@ -29,6 +30,8 @@ def amount_to_float(value: Any) -> float:
         return 0
     if hasattr(value, "tao"):
         return float(value.tao)
+    if hasattr(value, "value"):
+        return amount_to_float(value.value)
     if isinstance(value, str):
         numeric = re.sub(r"[^0-9.]", "", value)
         if not numeric:
@@ -70,37 +73,59 @@ def event_attributes(event: Any):
     return attrs
 
 
+def read_attr(attr: Any):
+    if isinstance(attr, dict):
+        return (
+            str(attr.get("name", "")).lower(),
+            str(attr.get("type", "")).lower(),
+            attr.get("value", attr),
+        )
+
+    name = str(getattr(attr, "name", "") or "").lower()
+    attr_type = str(getattr(attr, "type", "") or "").lower()
+    value = getattr(attr, "value", attr)
+    return name, attr_type, value
+
+
 def extract_amounts(event: Any):
-    tao_total = 0.0
-    alpha_total = 0.0
+    named_tao_amounts = []
+    named_alpha_amounts = []
+    positional_amounts = []
 
     for attr in event_attributes(event):
-        if isinstance(attr, dict):
-            name = str(attr.get("name", "")).lower()
-            attr_type = str(attr.get("type", "")).lower()
-            value = attr.get("value")
-        else:
-            name = str(getattr(attr, "name", "")).lower()
-            attr_type = str(getattr(attr, "type", "")).lower()
-            value = getattr(attr, "value", None)
+        name, attr_type, value = read_attr(attr)
 
         field_hint = f"{name} {attr_type}"
         if any(hint in field_hint for hint in NON_AMOUNT_FIELD_HINTS):
-            continue
-
-        if not any(hint in field_hint for hint in BALANCE_FIELD_HINTS):
             continue
 
         amount = amount_to_float(value)
         if amount <= 0:
             continue
 
-        if "alpha" in name:
-            alpha_total += amount
-        else:
-            tao_total += amount
+        if not name and not attr_type:
+            if amount > 0.000001:
+                positional_amounts.append(amount)
+            continue
 
-    return tao_total, alpha_total
+        if not any(hint in field_hint for hint in BALANCE_FIELD_HINTS):
+            continue
+
+        if any(hint in field_hint for hint in TOTAL_FIELD_HINTS):
+            continue
+
+        if "alpha" in name:
+            named_alpha_amounts.append(amount)
+        else:
+            named_tao_amounts.append(amount)
+
+    tao_amount = named_tao_amounts[0] if named_tao_amounts else 0
+    alpha_amount = named_alpha_amounts[0] if named_alpha_amounts else 0
+
+    if tao_amount == 0 and alpha_amount == 0 and positional_amounts:
+        tao_amount = positional_amounts[0]
+
+    return tao_amount, alpha_amount
 
 
 @dataclass
@@ -194,18 +219,20 @@ class DailyStakeStatsManager:
                     event_key = f"{module}.{name}".lower()
                     if "stakeadded" in event_key or "stake_added" in event_key:
                         tao, alpha = extract_amounts(event)
-                        self.stats.stake_tao += tao
-                        self.stats.stake_alpha += alpha
-                        self.stats.stake_events += 1
-                        if len(self.stats.samples) < 10:
-                            self.stats.samples.append(f"{block_number} {module}.{name} +{tao:.6f} TAO")
+                        if tao > 0 or alpha > 0:
+                            self.stats.stake_tao += tao
+                            self.stats.stake_alpha += alpha
+                            self.stats.stake_events += 1
+                            if len(self.stats.samples) < 10:
+                                self.stats.samples.append(f"{block_number} {module}.{name} +{tao:.6f} TAO")
                     elif "stakeremoved" in event_key or "stake_removed" in event_key:
                         tao, alpha = extract_amounts(event)
-                        self.stats.unstake_tao += tao
-                        self.stats.unstake_alpha += alpha
-                        self.stats.unstake_events += 1
-                        if len(self.stats.samples) < 10:
-                            self.stats.samples.append(f"{block_number} {module}.{name} -{tao:.6f} TAO")
+                        if tao > 0 or alpha > 0:
+                            self.stats.unstake_tao += tao
+                            self.stats.unstake_alpha += alpha
+                            self.stats.unstake_events += 1
+                            if len(self.stats.samples) < 10:
+                                self.stats.samples.append(f"{block_number} {module}.{name} -{tao:.6f} TAO")
 
                 self.stats.scanned_to_block = block_number
 
